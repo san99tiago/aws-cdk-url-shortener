@@ -1,8 +1,8 @@
-# :cloud: URL Shortener Architecture :cloud:
+# :scissors: URL Shortener Architecture :scissors:
 
-<img src="assets/UrlShortenerArchitecture.png" width=70%> <br>
+<img src="assets/UrlShortenerArchitecture.png" width=90%> <br>
 
-This project is a custom `URL-shortener` project deployed on AWS with the following specifications:
+This is a simple custom `URL-shortener` project deployed on AWS with the following specifications:
 
 - Infrastructure as Code with [AWS CDK](https://aws.amazon.com/cdk/)
 - Source Code with [AWS Lambda Functions](https://aws.amazon.com/lambda/) built with [Python Runtime](https://www.python.org)
@@ -17,7 +17,7 @@ This project was inspired by the following tutorials and examples:
 
 The information of this repository is based on many online resources, so feel free to use it as a guide for your future projects!. <br>
 
-## AWS CDK <br>
+## AWS CDK :cloud:
 
 [AWS Cloud Development Kit](https://aws.amazon.com/cdk/) is an amazing open-source software development framework to programmatically define cloud-based applications with familiar languages. <br>
 
@@ -67,7 +67,7 @@ I will be uploading most of the files, and try to keep it as clean as possible. 
             <p align="center">Senior DevOps Engineer passionate about advanced cloud-based solutions and deployments in AWS. I am convinced that today's greatest challenges must be solved by people that love what they do.</p>
         </td>
         <td>
-            <p align="center"><img src="assets/SantiagoGarciaArangoCDK.png" width=50%></p>
+            <p align="center"><img src="assets/SantiagoGarciaArangoCDK.png" width=60%></p>
         </td>
     </tr>
 </table>
