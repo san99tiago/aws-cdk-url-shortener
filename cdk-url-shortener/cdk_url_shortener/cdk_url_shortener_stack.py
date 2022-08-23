@@ -1,12 +1,15 @@
 import os
+from sys import api_version
 
 from aws_cdk import (
     Stack,
+    CfnOutput,
     Duration,
     aws_dynamodb,
     RemovalPolicy,
     aws_lambda,
     aws_iam,
+    aws_apigateway,
 )
 from constructs import Construct
 
@@ -17,15 +20,17 @@ class CdkUrlShortenerStack(Stack):
         scope: Construct,
         construct_id: str,
         name_prefix: str,
-        table_name: str,
-        lambda_name: str,
+        main_resources_name: str,
+        deployment_environment: str,
+        deployment_version: str,
         **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         self.construct_id = construct_id
         self.name_prefix = name_prefix
-        self.table_name = table_name
-        self.lambda_name = lambda_name
+        self.main_resources_name = main_resources_name
+        self.deployment_environment = deployment_environment
+        self.deployment_version = deployment_version
 
         # DynamoDB creation
         self.create_dynamodb_table()
@@ -36,16 +41,22 @@ class CdkUrlShortenerStack(Stack):
         self.create_lambda_role()
         self.create_lambda_function()
 
+        # API gateway creation
+        self.create_api_gateway()
+
+        # Relevant CloudFormation outputs
+        self.show_cloudformation_outputs()
+
 
     def create_dynamodb_table(self):
         self.table = aws_dynamodb.Table(
             self,
             id="{}-Table".format(self.construct_id),
-            table_name="{}{}-Table".format(self.name_prefix, self.table_name),
+            table_name="{}{}-Table".format(self.name_prefix, self.main_resources_name),
             read_capacity=1,
             write_capacity=1,
             partition_key=aws_dynamodb.Attribute(name="id", type=aws_dynamodb.AttributeType.STRING),
-            removal_policy=RemovalPolicy.DESTROY
+            removal_policy=RemovalPolicy.DESTROY,
         )
 
 
@@ -54,10 +65,24 @@ class CdkUrlShortenerStack(Stack):
         Method to create IAM policy statement for dynamodb usage.
         """
         self.dynamodb_access_policy_statement = aws_iam.PolicyStatement(
-            actions=["dynamodb:*"],
+            actions=[
+                "dynamodb:PutItem",
+                "dynamodb:UpdateItem",
+                "dynamodb:DeleteItem",
+                "dynamodb:BatchWriteItem",
+                "dynamodb:GetItem",
+                "dynamodb:BatchGetItem",
+                "dynamodb:Scan",
+                "dynamodb:Query",
+                "dynamodb:ConditionCheckItem"
+            ],
             effect=aws_iam.Effect.ALLOW,
-            resources=[self.table.table_arn]
+            resources=[
+                self.table.table_arn,
+                "{}/index/*".format(self.table.table_arn),
+            ],
         )
+
 
     def create_lambda_role_policy(self):
         """
@@ -66,10 +91,10 @@ class CdkUrlShortenerStack(Stack):
         self.lambda_role_policy = aws_iam.Policy(
             self,
             id="{}-Policy".format(self.construct_id),
-            policy_name="{}{}-Policy".format(self.name_prefix, self.lambda_name),
+            policy_name="{}{}-Policy".format(self.name_prefix, self.main_resources_name),
             statements=[
                 self.dynamodb_access_policy_statement,
-            ]
+            ],
         )
 
 
@@ -80,7 +105,7 @@ class CdkUrlShortenerStack(Stack):
         self.lambda_role = aws_iam.Role(
             self,
             id="{}-Role".format(self.construct_id),
-            role_name="{}{}-Role".format(self.name_prefix, self.lambda_name),
+            role_name="{}{}-Role".format(self.name_prefix, self.main_resources_name),
             description="Role for URL shortener stack",
             assumed_by=aws_iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[aws_iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")],
@@ -90,6 +115,9 @@ class CdkUrlShortenerStack(Stack):
 
 
     def create_lambda_function(self):
+        """
+        Method that creates the main Lambda function.
+        """
         # Get relative path for folder that contains Lambda function sources
         # ! Note--> we must obtain parent dirs to create path (that's why there is "os.path.dirname()")
         PATH_TO_FUNCTION_FOLDER = os.path.join(
@@ -98,16 +126,110 @@ class CdkUrlShortenerStack(Stack):
         )
         print("Source code for lambda function obtained from: ", PATH_TO_FUNCTION_FOLDER)
 
-        self.function = aws_lambda.Function(
+        self.lambda_function = aws_lambda.Function(
             self,
             id="{}-Lambda".format(self.construct_id),
-            function_name="{}{}".format(self.name_prefix, self.lambda_name),
+            function_name="{}{}".format(self.name_prefix, self.main_resources_name),
             code=aws_lambda.Code.from_asset(PATH_TO_FUNCTION_FOLDER),
             handler="url_lambda_function.lambda_handler",
             runtime=aws_lambda.Runtime.PYTHON_3_9,
-            environment={"TABLE_NAME": self.table_name},
+            environment={"TABLE_NAME": self.table.table_name},
             description="Lambda for URL shortener functionalities (connects with dynamodb to manage URLS).",
             role=self.lambda_role,
             timeout=Duration.seconds(15),
-            memory_size=128
+            memory_size=128,
+        )
+
+        self.lambda_function.add_alias(self.deployment_environment)
+
+
+    def create_api_gateway(self):
+        """
+        Method that creates the API Gateway.
+        """
+
+        self.api = aws_apigateway.LambdaRestApi(
+            self,
+            id="{}-RestApi".format(self.construct_id),
+            rest_api_name="{}{}".format(self.name_prefix, self.main_resources_name),
+            description="API to create/read URLs for the shortener stack",
+            handler=self.lambda_function,
+            default_cors_preflight_options=aws_apigateway.CorsOptions(
+                allow_origins=aws_apigateway.Cors.ALL_ORIGINS,
+                allow_methods=["GET"],
+            ),
+            deploy_options=aws_apigateway.StageOptions(
+                stage_name=self.deployment_version,
+                description="{} release for handling requests that interact with the URL shortener stack".format(self.deployment_environment),
+            ),
+            deploy=True,
+            retain_deployments=False,
+            proxy=False,
+        )
+
+        self.urls_resource = self.api.root.add_resource("urls")
+        self.urls_resource.add_method("GET") # GET /urls
+
+        self.api_items = self.urls_resource.add_resource("{url}")
+        self.api_items.add_method("GET") # GET /urls/{url}
+
+
+    def show_cloudformation_outputs(self):
+        """
+        Method to create/add the relevant CloudFormation outputs.
+        """
+        CfnOutput(
+            self,
+            "DeploymentVersion",
+            value=self.deployment_version,
+            description="Current deployment's version",
+        )
+
+        CfnOutput(
+            self,
+            "DeploymentEnvironment",
+            value=self.deployment_environment,
+            description="Deployment environment",
+        )
+
+        CfnOutput(
+            self,
+            "NamePrefixes",
+            value=self.name_prefix,
+            description="Name prefixes for the resources",
+        )
+
+        CfnOutput(
+            self,
+            "DynamoDBTableName",
+            value=self.table.table_name,
+            description="Name of the DynamoDB table",
+        )
+
+        CfnOutput(
+            self,
+            "LambdaFunctionARN",
+            value=self.lambda_function.function_arn,
+            description="ARN of the created Lambda function",
+        )
+
+        CfnOutput(
+            self,
+            "LambdaFunctionRoleARN",
+            value=self.lambda_function.role.role_arn,
+            description="Role for the created Lambda function",
+        )
+
+        CfnOutput(
+            self,
+            "BaseApiUrl",
+            value=self.api.rest_api_id,
+            description="Base URL for the API endpoint (includes latest stage)",
+        )
+
+        CfnOutput(
+            self,
+            "CompleteApiUrl",
+            value="{}{}".format(self.api.url, "urls"),
+            description="Complete URL for the API endpoint",
         )

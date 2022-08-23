@@ -25,13 +25,13 @@ def create_short_url(event):
     response = table.put_item(Item={
         "id": unique_id,
         "target_url": target_url,
-        "last_updated": datetime.datetime.now()
+        "last_updated": datetime.datetime.now().strftime("%Y/%m%d %H:%M:%S")
     })
     LOG.debug("create_short_url: put_item response is {}".format(response))
 
     # Create the "redirect" URL
 
-    url = "{}://{}{}{}".format(
+    url = "{}://{}{}/{}".format(
         "https",
         event["requestContext"]["domainName"],
         event["requestContext"]["path"],
@@ -46,7 +46,7 @@ def create_short_url(event):
 
 
 def read_short_url(event):
-    unique_id = event["pathParameters"]["proxy"]
+    unique_id = event["pathParameters"]["url"]
 
     # Add the item in DynamoDB
     response = table.get_item(Key={"id": unique_id})
@@ -76,10 +76,16 @@ def lambda_handler(event, context):
         if event["queryStringParameters"]["targetUrl"] is not None:
             return create_short_url(event)
 
-    if event["pathParameters"] is not None and event["pathParameters"]["proxy"] is not None:
+    if event["pathParameters"] is not None and event["pathParameters"]["url"] is not None:
             return read_short_url(event)
 
     return {
         "statusCode": 200,
-        "body": json.dumps("usage: ?targetUrl=URL", sort_keys=True, default=str)
+        "body": json.dumps(
+            {
+                "instructions": "Please call this endpoint as the <type_usage> indicates...",
+                "create_usage": "?targetUrl=URL",
+                "read_usage": "{id_to_search}",
+            }
+            , sort_keys=True, default=str)
     }
