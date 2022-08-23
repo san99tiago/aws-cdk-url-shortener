@@ -5,24 +5,22 @@ import aws_cdk as cdk
 
 from cdk_url_shortener.cdk_url_shortener_stack import CdkUrlShortenerStack
 
+NAME_PREFIX = "Santi-Dev-"
+TABLE_NAME = "Urls"
+LAMBDA_NAME = "Url-Shortener-Lambda"
 
 app = cdk.App()
-CdkUrlShortenerStack(app, "CdkUrlShortenerStack",
-    # If you don't specify 'env', this stack will be environment-agnostic.
-    # Account/Region-dependent features and context lookups will not work,
-    # but a single synthesized template can be deployed anywhere.
+cool_stack = CdkUrlShortenerStack(
+    app,
+    "{}CdkUrlShortenerStack".format(NAME_PREFIX),
+    NAME_PREFIX,
+    TABLE_NAME,
+    LAMBDA_NAME
+)
 
-    # Uncomment the next line to specialize this stack for the AWS Account
-    # and Region that are implied by the current CLI configuration.
-
-    #env=cdk.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region=os.getenv('CDK_DEFAULT_REGION')),
-
-    # Uncomment the next line if you know exactly what Account and Region you
-    # want to deploy the stack to. */
-
-    #env=cdk.Environment(account='123456789012', region='us-east-1'),
-
-    # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
-    )
+cdk.Tags.of(cool_stack).add("Environment", "Development")
+cdk.Tags.of(cool_stack).add("RepositoryUrl", "https://github.com/san99tiago/aws-cdk-url-shortener")
+cdk.Tags.of(cool_stack).add("Source", "aws-cdk-url-shortener")
+cdk.Tags.of(cool_stack).add("Owner", "Santiago Garcia Arango")
 
 app.synth()
