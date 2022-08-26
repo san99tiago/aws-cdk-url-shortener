@@ -1,19 +1,17 @@
 import os
-from sys import api_version
 
 from aws_cdk import (
     Stack,
     CfnOutput,
+    Fn,
     Duration,
-    aws_dynamodb,
-    RemovalPolicy,
     aws_lambda,
     aws_iam,
     aws_apigateway,
 )
 from constructs import Construct
 
-class CdkUrlShortenerStack(Stack):
+class CdkUrlShortenerStackCompute(Stack):
 
     def __init__(
         self,
@@ -32,8 +30,8 @@ class CdkUrlShortenerStack(Stack):
         self.deployment_environment = deployment_environment
         self.deployment_version = deployment_version
 
-        # DynamoDB creation
-        self.create_dynamodb_table()
+        # Obtain important values from outputs of other stacks
+        self.load_values_from_other_stacks_outputs()
 
         # Lambda function creation
         self.create_policy_statement_for_lambda_to_dynamodb()
@@ -48,16 +46,12 @@ class CdkUrlShortenerStack(Stack):
         self.show_cloudformation_outputs()
 
 
-    def create_dynamodb_table(self):
-        self.table = aws_dynamodb.Table(
-            self,
-            id="{}-Table".format(self.construct_id),
-            table_name="{}{}-Table".format(self.name_prefix, self.main_resources_name),
-            read_capacity=1,
-            write_capacity=1,
-            partition_key=aws_dynamodb.Attribute(name="id", type=aws_dynamodb.AttributeType.STRING),
-            removal_policy=RemovalPolicy.DESTROY,
-        )
+    def load_values_from_other_stacks_outputs(self):
+        """
+        Method to load outputs from other stacks to use in this one (decoupled approach).
+        """
+        self.table_arn = Fn.import_value("DynamoDBTableARN")
+        print("Loaded <table_arn> value from other stack output is: ", self.table_arn)
 
 
     def create_policy_statement_for_lambda_to_dynamodb(self):
@@ -78,8 +72,8 @@ class CdkUrlShortenerStack(Stack):
             ],
             effect=aws_iam.Effect.ALLOW,
             resources=[
-                self.table.table_arn,
-                "{}/index/*".format(self.table.table_arn),
+                self.table_arn,
+                "{}/index/*".format(self.table_arn),
             ],
         )
 
@@ -133,7 +127,7 @@ class CdkUrlShortenerStack(Stack):
             code=aws_lambda.Code.from_asset(PATH_TO_FUNCTION_FOLDER),
             handler="url_lambda_function.lambda_handler",
             runtime=aws_lambda.Runtime.PYTHON_3_9,
-            environment={"TABLE_NAME": self.table.table_name},
+            environment={"TABLE_NAME": "{}{}-Table".format(self.name_prefix, self.main_resources_name)},
             description="Lambda for URL shortener functionalities (connects with dynamodb to manage URLS).",
             role=self.lambda_role,
             timeout=Duration.seconds(15),
@@ -197,13 +191,6 @@ class CdkUrlShortenerStack(Stack):
             "NamePrefixes",
             value=self.name_prefix,
             description="Name prefixes for the resources",
-        )
-
-        CfnOutput(
-            self,
-            "DynamoDBTableName",
-            value=self.table.table_name,
-            description="Name of the DynamoDB table",
         )
 
         CfnOutput(

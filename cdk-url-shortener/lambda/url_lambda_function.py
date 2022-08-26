@@ -76,8 +76,8 @@ def lambda_handler(event, context):
         if event["queryStringParameters"]["targetUrl"] is not None:
             return create_short_url(event)
 
-    if event["pathParameters"] is not None and event["pathParameters"]["url"] is not None:
-            return read_short_url(event)
+    if event["pathParameters"] is not None:
+        return read_short_url(event)
 
     return {
         "statusCode": 200,
