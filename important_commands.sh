@@ -54,10 +54,18 @@ pip install -r requirements.txt || pip3 install -r requirements.txt
 ################################################################################
 
 cdk bootstrap
-cdk synthesize
-cdk diff
-cdk deploy
-cdk destroy
+
+# Storage Stack
+cdk synthesize --app "python3 app_storage.py"
+cdk diff --app "python3 app_storage.py"
+cdk deploy --app "python3 app_storage.py"
+cdk destroy --app "python3 app_storage.py"
+
+# Compute Stack (requires Storage Stack already deployed)
+cdk synthesize --app "python3 app_compute.py"
+cdk diff --app "python3 app_compute.py"
+cdk deploy --app "python3 app_compute.py"
+cdk destroy --app "python3 app_compute.py"
 
 
 ################################################################################
