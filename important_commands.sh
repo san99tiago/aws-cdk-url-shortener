@@ -54,6 +54,7 @@ pip install -r requirements.txt || pip3 install -r requirements.txt
 ################################################################################
 
 cdk bootstrap
+source .venv/bin/activate || echo "Make sure that virtual env exists"
 
 # Storage Stack
 cdk synthesize --app "python3 app_storage.py"
